@@ -2142,9 +2142,7 @@ Box:AddDropdown("AutoSkill", {
 
     end
 })
-local Box = Tab1:AddRightGroupbox(
-    "Dungeon"
-)
+
 --// =========================================
 --// ON / OFF
 --// =========================================
@@ -2167,7 +2165,9 @@ Box:AddToggle("AutoSkillToggle", {
     end
 })
     
-
+local Box = Tab1:AddleftGroupbox(
+    "Dungeon"
+)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
