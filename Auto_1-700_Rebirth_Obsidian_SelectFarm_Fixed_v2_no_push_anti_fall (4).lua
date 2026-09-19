@@ -2142,7 +2142,9 @@ Box:AddDropdown("AutoSkill", {
 
     end
 })
-
+local Box = Tab1:AddRightGroupbox(
+    "Dungeon"
+)
 --// =========================================
 --// ON / OFF
 --// =========================================
