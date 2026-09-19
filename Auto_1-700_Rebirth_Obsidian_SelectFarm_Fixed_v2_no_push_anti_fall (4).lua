@@ -2848,7 +2848,7 @@ end)
 -- MAIN TOGGLE
 --==================================================
 
-DungeonBox:AddToggle("Dungeon", {
+Box:AddToggle("Dungeon", {
     Text = "auto kill Dungeon",
     Default = false,
 
@@ -3306,7 +3306,7 @@ _G.AutoWalkCore = {
 -- OBSIDIAN TOGGLE
 --==================================================
 
-DungeonBox:AddToggle("Dungeon", {
+Box:AddToggle("Dungeon", {
     Text = "Auto nextarea",
     Default = false,
 
