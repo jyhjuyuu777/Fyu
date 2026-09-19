@@ -941,7 +941,7 @@ end
 
 Box:AddToggle("AntiFall", {
     Text = "Anti Fall",
-    Default = true,
+    Default = false,
 
     Callback = function(Value)
         AntiFall = Value
