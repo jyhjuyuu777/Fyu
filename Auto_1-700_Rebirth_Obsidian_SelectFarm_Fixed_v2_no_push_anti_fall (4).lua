@@ -2832,3 +2832,452 @@ DungeonBox:AddToggle("Dungeon", {
         end
     end
 })
+--// =========================================
+--// AUTO NEXTAREA - OBSIDIAN
+--// RANDOM WALK + AUTO INTERACT
+--// =========================================
+
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+--==================================================
+-- OBSIDIAN
+--==================================================
+
+
+
+local AutoWalk = false
+local Speed = 16
+
+local Walking = false
+local TargetVisual = nil
+
+--==================================================
+-- RANDOM MOVEMENT
+--==================================================
+
+local RandomDirection = Vector3.zero
+local RandomTimer = 0
+local RandomMode = "Forward"
+
+local function NewRandomAction()
+
+    local Roll = math.random(1, 100)
+
+    if Roll <= 55 then
+
+        RandomMode = "Forward"
+
+    elseif Roll <= 75 then
+
+        RandomMode = "Side"
+
+        local Side =
+            math.random(0, 1) == 0 and -1 or 1
+
+        RandomDirection =
+            Vector3.new(Side, 0, 0)
+
+    elseif Roll <= 90 then
+
+        RandomMode = "Circle"
+
+    else
+
+        RandomMode = "Rotate"
+
+    end
+
+    RandomTimer = math.random(4, 12) / 10
+end
+
+--==================================================
+-- STOP WALKING
+--==================================================
+
+local function StopWalking()
+
+    Walking = false
+    TargetVisual = nil
+
+    local Character = LocalPlayer.Character
+
+    local Humanoid =
+        Character and
+        Character:FindFirstChildOfClass("Humanoid")
+
+    if Humanoid then
+        Humanoid:Move(Vector3.zero, false)
+    end
+end
+
+--==================================================
+-- RANDOM MOVEMENT LOOP
+--==================================================
+
+RunService.RenderStepped:Connect(function(dt)
+
+    if not AutoWalk then
+        return
+    end
+
+    if not Walking or not TargetVisual then
+        return
+    end
+
+    local Character = LocalPlayer.Character
+
+    local Humanoid =
+        Character and
+        Character:FindFirstChildOfClass("Humanoid")
+
+    local HRP =
+        Character and
+        Character:FindFirstChild("HumanoidRootPart")
+
+    if not Humanoid or not HRP then
+        return
+    end
+
+    if not TargetVisual.Parent then
+        StopWalking()
+        return
+    end
+
+    Humanoid.WalkSpeed = Speed
+
+    local ToTarget =
+        TargetVisual.Position - HRP.Position
+
+    local Distance =
+        ToTarget.Magnitude
+
+    if Distance <= 5 then
+
+        Humanoid:Move(Vector3.zero, false)
+
+        return
+    end
+
+    RandomTimer -= dt
+
+    if RandomTimer <= 0 then
+        NewRandomAction()
+    end
+
+    local Forward = ToTarget.Unit
+
+    local Right =
+        Vector3.new(
+            -Forward.Z,
+            0,
+            Forward.X
+        )
+
+    local MoveDirection
+
+    if RandomMode == "Forward" then
+
+        MoveDirection = Forward
+
+    elseif RandomMode == "Side" then
+
+        MoveDirection = (
+            Forward +
+            Right *
+            RandomDirection.X *
+            0.7
+        ).Unit
+
+    elseif RandomMode == "Circle" then
+
+        MoveDirection = (
+            Forward +
+            Right *
+            math.sin(os.clock() * 3) *
+            0.8
+        ).Unit
+
+    elseif RandomMode == "Rotate" then
+
+        Humanoid:Move(Vector3.zero, false)
+
+        HRP.CFrame =
+            HRP.CFrame *
+            CFrame.Angles(
+                0,
+                math.rad(100) * dt,
+                0
+            )
+
+        return
+    end
+
+    Humanoid:Move(MoveDirection, false)
+
+end)
+
+--==================================================
+-- MAIN AUTO WALK LOOP
+--==================================================
+
+task.spawn(function()
+
+    while task.wait(0.1) do
+
+        if not AutoWalk then
+            StopWalking()
+            continue
+        end
+
+        --==================================================
+        -- CHECK SERVER PLAYER
+        --==================================================
+
+        if #Players:GetPlayers() >= 2 then
+
+            StopWalking()
+
+            pcall(function()
+                TeleportService:Teleport(
+                    game.PlaceId,
+                    LocalPlayer
+                )
+            end)
+
+            break
+        end
+
+        --==================================================
+        -- FIND DUNGEON VISUAL
+        --==================================================
+
+        local Dungeon =
+            Workspace:FindFirstChild("Dungeon")
+
+        local Stages =
+            Dungeon and
+            Dungeon:FindFirstChild("Stages")
+
+        local Stage0 =
+            Stages and
+            Stages:FindFirstChild("0")
+
+        local NextArea =
+            Stage0 and
+            Stage0:FindFirstChild("NextArea")
+
+        local Container =
+            NextArea and
+            NextArea:FindFirstChild("Container")
+
+        local Visual =
+            Container and
+            Container:FindFirstChild("Visual")
+
+        if not Visual then
+
+            StopWalking()
+            continue
+        end
+
+        --==================================================
+        -- CHECK ATOM MAX
+        --==================================================
+
+        local WorldMobs =
+            Workspace:FindFirstChild("World Mobs")
+
+        local EventMobs =
+            WorldMobs and
+            WorldMobs:FindFirstChild("Event Mobs")
+
+        local AtomMax =
+            EventMobs and
+            EventMobs:FindFirstChild("Atom Max")
+
+        if AtomMax then
+
+            StopWalking()
+            continue
+        end
+
+        --==================================================
+        -- WALK TO VISUAL
+        --==================================================
+
+        if Visual:IsA("BasePart") then
+
+            TargetVisual = Visual
+            Walking = true
+
+            local Character =
+                LocalPlayer.Character
+
+            local HRP =
+                Character and
+                Character:FindFirstChild(
+                    "HumanoidRootPart"
+                )
+
+            if HRP then
+
+                local Distance =
+                    (Visual.Position - HRP.Position).Magnitude
+
+                if Distance <= 5 then
+
+                    Walking = false
+
+                    local Humanoid =
+                        Character:FindFirstChildOfClass(
+                            "Humanoid"
+                        )
+
+                    if Humanoid then
+                        Humanoid:Move(
+                            Vector3.zero,
+                            false
+                        )
+                    end
+
+                    --// Đợi trước khi interact
+                    task.wait(0.8)
+
+                    --// Kiểm tra AutoWalk
+                    if not AutoWalk then
+                        TargetVisual = nil
+                        continue
+                    end
+
+                    --// Kiểm tra player
+                    if #Players:GetPlayers() >= 2 then
+
+                        TargetVisual = nil
+
+                        pcall(function()
+                            TeleportService:Teleport(
+                                game.PlaceId,
+                                LocalPlayer
+                            )
+                        end)
+
+                        break
+                    end
+
+                    --// Kiểm tra Visual
+                    if not Visual.Parent then
+                        TargetVisual = nil
+                        continue
+                    end
+
+                    --// Kiểm tra Atom Max lần nữa
+                    WorldMobs =
+                        Workspace:FindFirstChild(
+                            "World Mobs"
+                        )
+
+                    EventMobs =
+                        WorldMobs and
+                        WorldMobs:FindFirstChild(
+                            "Event Mobs"
+                        )
+
+                    AtomMax =
+                        EventMobs and
+                        EventMobs:FindFirstChild(
+                            "Atom Max"
+                        )
+
+                    if AtomMax then
+                        TargetVisual = nil
+                        continue
+                    end
+
+                    --==================================================
+                    -- INTERACT
+                    --==================================================
+
+                    local Pad =
+                        NextArea:FindFirstChild(
+                            "DungeonNextAreaPad"
+                        )
+
+                    local RE =
+                        Pad and
+                        Pad:FindFirstChild("RE")
+
+                    local Interact =
+                        RE and
+                        RE:FindFirstChild("Interact")
+
+                    if Interact then
+                        pcall(function()
+                            Interact:FireServer()
+                        end)
+                    end
+
+                    TargetVisual = nil
+                    Walking = false
+                end
+            end
+        end
+    end
+end)
+
+--==================================================
+-- CONTROL API
+--==================================================
+
+_G.AutoWalkCore = {
+
+    SetEnabled = function(Value)
+
+        AutoWalk = Value
+
+        if not Value then
+            StopWalking()
+        else
+            NewRandomAction()
+        end
+    end,
+
+    SetSpeed = function(Value)
+
+        Speed = tonumber(Value) or 16
+    end,
+
+    GetEnabled = function()
+
+        return AutoWalk
+    end,
+
+    GetSpeed = function()
+
+        return Speed
+    end
+}
+
+--==================================================
+-- OBSIDIAN TOGGLE
+--==================================================
+
+Box:AddToggle("Dungeon", {
+    Text = "Auto nextarea",
+    Default = false,
+
+    Callback = function(Value)
+
+        AutoWalk = Value
+
+        if Value then
+            NewRandomAction()
+        else
+            StopWalking()
+        end
+    end
+})
