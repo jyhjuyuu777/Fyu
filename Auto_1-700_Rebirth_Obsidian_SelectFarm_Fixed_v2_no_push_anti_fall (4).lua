@@ -2164,12 +2164,7 @@ Box:AddToggle("AutoSkillToggle", {
 
     end
 })
---// =========================================
---// AUTO KILL DUNGEON
---// EVENT MOB FOLLOW + SKILL 1
---// SMOOTH TWEEN + ANTI FALL
---// AUTO SWITCH WHEN MOB HP = 0
---// =========================================
+    
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -2178,83 +2173,74 @@ local RunService = game:GetService("RunService")
 
 local LP = Players.LocalPlayer
 
---// =========================================
---// OBSIDIAN
---// =========================================
 
- local DungeonBox = Tab1:AddRightGroupbox("Dungeon")
+local TWEEN_SPEED = 290
 
---// =========================================
---// SETTINGS
---// =========================================
-
-local FOLLOW_DISTANCE = 6
+local FOLLOW_DISTANCE = 4
 local FLOAT_HEIGHT = 5
-local TWEEN_TIME = 0.13
 
 local SKILL_DELAY = 0.08
-local SKILL_RANGE = 200
+local SKILL_RANGE = 20
 
-local ANTI_FALL_HEIGHT = 2
-local MAX_FALL_DISTANCE = 12
+local TARGET_UPDATE_DISTANCE = 3
+local MIN_TWEEN_TIME = 0.04
 
---// =========================================
---// REMOTES
---// =========================================
+--==================================================
+-- STATE
+--==================================================
+
+local AutoKillDungeon = false
+
+local CurrentMob = nil
+
+local CurrentTween = nil
+
+local FollowToken = 0
+local SkillToken = 0
+
+local LastSkill = 0
+
+local HealthConnection = nil
+
+--==================================================
+-- SERVICES / REMOTES
+--==================================================
 
 local SkillRemote = ReplicatedStorage
     :WaitForChild("Remotes")
     :WaitForChild("SkillRemote")
 
-local SkillManager = ReplicatedStorage
+local LockedOnChanged = ReplicatedStorage
     :WaitForChild("Packages")
     :WaitForChild("_Index")
     :WaitForChild("sleitnick_knit@1.4.7")
     :WaitForChild("knit")
     :WaitForChild("Services")
     :WaitForChild("SkillManager")
-
-local LockedOnChanged = SkillManager
     :WaitForChild("RE")
     :WaitForChild("LockedOnChanged")
-
---// =========================================
---// FOLDER
---// =========================================
 
 local EventMobs = workspace
     :WaitForChild("World Mobs")
     :WaitForChild("Event Mobs")
 
---// =========================================
---// STATE
---// =========================================
-
-local AutoKillDungeon = false
-
-local CurrentMob = nil
-local CurrentTween = nil
-
-local FollowConnection = nil
-local SkillConnection = nil
-local DetectConnection = nil
-local HealthConnection = nil
-
-local LastSkill = 0
-
---// =========================================
---// CHARACTER
---// =========================================
+--==================================================
+-- CHARACTER
+--==================================================
 
 local function GetCharacter()
+
     local Character = LP.Character
 
     if not Character then
         return nil
     end
 
-    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
-    local HRP = Character:FindFirstChild("HumanoidRootPart")
+    local Humanoid =
+        Character:FindFirstChildOfClass("Humanoid")
+
+    local HRP =
+        Character:FindFirstChild("HumanoidRootPart")
 
     if not Humanoid or not HRP then
         return nil
@@ -2267,88 +2253,96 @@ local function GetCharacter()
     return Character, Humanoid, HRP
 end
 
---// =========================================
---// MOB ROOT
---// =========================================
+--==================================================
+-- MOB ROOT
+--==================================================
 
 local function GetMobRoot(Mob)
+
     if not Mob or not Mob.Parent then
         return nil
     end
 
-    local HRP = Mob:FindFirstChild("HumanoidRootPart")
+    local HRP =
+        Mob:FindFirstChild("HumanoidRootPart")
 
     if HRP and HRP:IsA("BasePart") then
         return HRP
     end
 
-    if Mob.PrimaryPart and Mob.PrimaryPart:IsA("BasePart") then
+    if Mob.PrimaryPart
+        and Mob.PrimaryPart:IsA("BasePart") then
+
         return Mob.PrimaryPart
     end
 
-    for _, Obj in ipairs(Mob:GetChildren()) do
-        if Obj:IsA("BasePart") then
-            return Obj
+    for _, Object in ipairs(Mob:GetDescendants()) do
+
+        if Object:IsA("BasePart") then
+            return Object
         end
+
     end
 
     return nil
 end
 
---// =========================================
---// CHECK MOB ALIVE
---// =========================================
+--==================================================
+-- MOB ALIVE
+--==================================================
 
-local function IsMobDead(Mob)
+local function IsMobAlive(Mob)
+
     if not Mob or not Mob.Parent then
-        return true
+        return false
     end
 
-    local Humanoid = Mob:FindFirstChildOfClass("Humanoid")
+    local Humanoid =
+        Mob:FindFirstChildOfClass("Humanoid")
 
     if Humanoid and Humanoid.Health <= 0 then
-        return true
+        return false
     end
 
     local Root = GetMobRoot(Mob)
 
     if not Root then
-        return true
+        return false
     end
 
-    return false
+    return true
 end
 
---// =========================================
---// FIND NEXT ALIVE MOB
---// =========================================
+--==================================================
+-- FIND NEXT MOB
+--==================================================
 
-local function FindNextAliveMob()
+local function FindNextMob()
+
     if not AutoKillDungeon then
         return nil
     end
 
     for _, Mob in ipairs(EventMobs:GetChildren()) do
 
-        if Mob ~= CurrentMob and not IsMobDead(Mob) then
+        if Mob ~= CurrentMob
+            and IsMobAlive(Mob) then
 
-            local Root = GetMobRoot(Mob)
-
-            if Root then
-                return Mob
-            end
+            return Mob
         end
     end
 
     return nil
 end
 
---// =========================================
---// STOP CURRENT MOVEMENT
---// =========================================
+--==================================================
+-- STOP TWEEN
+--==================================================
 
 local function StopTween()
+
     if CurrentTween then
+
         pcall(function()
             CurrentTween:Cancel()
         end)
@@ -2357,456 +2351,501 @@ local function StopTween()
     end
 end
 
---// =========================================
---// DISCONNECT HEALTH
---// =========================================
+--==================================================
+-- CLEAN HEALTH
+--==================================================
 
 local function DisconnectHealth()
+
     if HealthConnection then
         HealthConnection:Disconnect()
         HealthConnection = nil
     end
 end
 
---// =========================================
---// DISCONNECT FOLLOW
---// =========================================
-
-local function DisconnectFollow()
-    if FollowConnection then
-        FollowConnection:Disconnect()
-        FollowConnection = nil
-    end
-end
-
---// =========================================
---// DISCONNECT SKILL
---// =========================================
-
-local function DisconnectSkill()
-    if SkillConnection then
-        SkillConnection:Disconnect()
-        SkillConnection = nil
-    end
-end
-
---// =========================================
---// WATCH MOB HP
---// =========================================
-
-local function WatchMobHealth(Mob)
-
-    DisconnectHealth()
-
-    if not Mob then
-        return
-    end
-
-    local Humanoid = Mob:FindFirstChildOfClass("Humanoid")
-
-    if not Humanoid then
-        return
-    end
-
-    HealthConnection = Humanoid.HealthChanged:Connect(function(Health)
-
-        if not AutoKillDungeon then
-            return
-        end
-
-        if CurrentMob ~= Mob then
-            return
-        end
-
-        --// MOB CHẾT -> ĐỔI NGAY
-        if Health <= 0 then
-
-            StopTween()
-            DisconnectFollow()
-            DisconnectSkill()
-            DisconnectHealth()
-
-            CurrentMob = nil
-
-            task.defer(function()
-
-                if not AutoKillDungeon then
-                    return
-                end
-
-                local NextMob = FindNextAliveMob()
-
-                if NextMob then
-                    SetMob(NextMob)
-                end
-            end)
-        end
-    end)
-end
-
---// =========================================
---// FOLLOW MOB
---// =========================================
-
-local function StartFollow(Mob)
-
-    DisconnectFollow()
-    StopTween()
-
-    FollowConnection = RunService.Heartbeat:Connect(function()
-
-        if not AutoKillDungeon then
-            return
-        end
-
-        if CurrentMob ~= Mob then
-            return
-        end
-
-        if IsMobDead(Mob) then
-
-            StopTween()
-            DisconnectFollow()
-
-            if CurrentMob == Mob then
-                CurrentMob = nil
-
-                local NextMob = FindNextAliveMob()
-
-                if NextMob then
-                    SetMob(NextMob)
-                end
-            end
-
-            return
-        end
-
-        local Character, Humanoid, HRP = GetCharacter()
-
-        if not Character or not HRP then
-            return
-        end
-
-        local MobRoot = GetMobRoot(Mob)
-
-        if not MobRoot then
-            return
-        end
-
-        local MobPosition = MobRoot.Position
-
-        --// VỊ TRÍ LƠ LỬNG SAU MOB
-        local TargetPosition =
-            MobPosition
-            + Vector3.new(
-                0,
-                FLOAT_HEIGHT,
-                FOLLOW_DISTANCE
-            )
-
-        --// ANTI FALL
-        if HRP.Position.Y < MobPosition.Y - MAX_FALL_DISTANCE then
-
-            HRP.CFrame = CFrame.new(
-                TargetPosition,
-                MobPosition
-            )
-
-            return
-        end
-
-        --// TWEEN MƯỢT
-        local Distance = (HRP.Position - TargetPosition).Magnitude
-
-        if Distance > 1 then
-
-            StopTween()
-
-            local TweenInfoData = TweenInfo.new(
-                TWEEN_TIME,
-                Enum.EasingStyle.Linear,
-                Enum.EasingDirection.Out
-            )
-
-            CurrentTween = TweenService:Create(
-                HRP,
-                TweenInfoData,
-                {
-                    CFrame = CFrame.new(
-                        TargetPosition,
-                        MobPosition
-                    )
-                }
-            )
-
-            CurrentTween:Play()
-        end
-
-        --// GIỮ ĐỘ CAO
-        if HRP.Position.Y < TargetPosition.Y - ANTI_FALL_HEIGHT then
-
-            HRP.CFrame = CFrame.new(
-                Vector3.new(
-                    HRP.Position.X,
-                    TargetPosition.Y,
-                    HRP.Position.Z
-                ),
-                MobPosition
-            )
-        end
-    end)
-end
-
---// =========================================
---// SKILL 1
---// =========================================
-
-local function StartSkill(Mob)
-
-    DisconnectSkill()
-
-    SkillConnection = RunService.Heartbeat:Connect(function()
-
-        if not AutoKillDungeon then
-            return
-        end
-
-        if CurrentMob ~= Mob then
-            return
-        end
-
-        if IsMobDead(Mob) then
-            return
-        end
-
-        local Character, Humanoid, HRP = GetCharacter()
-
-        if not Character or not HRP then
-            return
-        end
-
-        local MobRoot = GetMobRoot(Mob)
-
-        if not MobRoot then
-            return
-        end
-
-        local MobPosition = MobRoot.Position
-        local Distance = (HRP.Position - MobPosition).Magnitude
-
-        if Distance > SKILL_RANGE then
-            return
-        end
-
-        if os.clock() - LastSkill < SKILL_DELAY then
-            return
-        end
-
-        LastSkill = os.clock()
-
-        local Camera = workspace.CurrentCamera
-
-        local CameraCF = Camera
-            and Camera.CFrame
-            or HRP.CFrame
-
-        local LookCF = CFrame.lookAt(
-            HRP.Position,
-            MobPosition
-        )
-
-        local args = {
-            [1] = {
-                ["Camera"] = CameraCF,
-                ["SkillId"] = "1",
-                ["Began"] = true,
-                ["CFrame"] = LookCF,
-                ["Typ\208\181"] = 1,
-                ["Aim"] = MobPosition
-            }
-        }
-
-        pcall(function()
-            SkillRemote:FireServer(unpack(args))
-        end)
-    end)
-end
-
---// =========================================
---// SET MOB
---// =========================================
-
-function SetMob(Mob)
+--==================================================
+-- SWITCH MOB
+--==================================================
+
+local function SwitchToMob(Mob)
 
     if not AutoKillDungeon then
         return
     end
 
-    if not Mob then
+    if not Mob or not IsMobAlive(Mob) then
         return
     end
 
-    if IsMobDead(Mob) then
-
-        local NextMob = FindNextAliveMob()
-
-        if NextMob then
-            SetMob(NextMob)
-        end
-
-        return
-    end
-
-    --// DỪNG TARGET CŨ
+    -- stop target cũ
     StopTween()
-    DisconnectFollow()
-    DisconnectSkill()
     DisconnectHealth()
 
     CurrentMob = Mob
 
-    --// LOCK TARGET
+    -- lock mob
     pcall(function()
         LockedOnChanged:FireServer(Mob)
     end)
 
-    --// THEO DÕI HP
-    WatchMobHealth(Mob)
+    --==================================================
+    -- WATCH HP
+    --==================================================
 
-    --// FOLLOW
-    StartFollow(Mob)
+    local Humanoid =
+        Mob:FindFirstChildOfClass("Humanoid")
 
-    --// SKILL
-    StartSkill(Mob)
+    if Humanoid then
+
+        HealthConnection =
+            Humanoid.HealthChanged:Connect(function(Health)
+
+                if not AutoKillDungeon then
+                    return
+                end
+
+                if CurrentMob ~= Mob then
+                    return
+                end
+
+                if Health <= 0 then
+
+                    -- chết -> đổi ngay
+                    StopTween()
+                    DisconnectHealth()
+
+                    CurrentMob = nil
+
+                    task.defer(function()
+
+                        if not AutoKillDungeon then
+                            return
+                        end
+
+                        local NextMob =
+                            FindNextMob()
+
+                        if NextMob then
+                            SwitchToMob(NextMob)
+                        end
+                    end)
+                end
+            end)
+    end
 end
 
---// =========================================
---// DETECT MOB
---// =========================================
+--==================================================
+-- SMOOTH TWEEN FOLLOW
+--==================================================
 
-local function FindEventMob()
+local function StartTweenFollow()
+
+    FollowToken += 1
+
+    local MyToken = FollowToken
+
+    task.spawn(function()
+
+        local LastTarget = nil
+
+        while AutoKillDungeon
+            and MyToken == FollowToken do
+
+            local Mob = CurrentMob
+
+            if not Mob then
+
+                local NextMob =
+                    FindNextMob()
+
+                if NextMob then
+                    SwitchToMob(NextMob)
+                end
+
+                task.wait(0.05)
+                continue
+            end
+
+            if not IsMobAlive(Mob) then
+
+                StopTween()
+
+                CurrentMob = nil
+
+                local NextMob =
+                    FindNextMob()
+
+                if NextMob then
+                    SwitchToMob(NextMob)
+                end
+
+                task.wait(0.03)
+                continue
+            end
+
+            local Character, Humanoid, HRP =
+                GetCharacter()
+
+            if not Character then
+                task.wait(0.1)
+                continue
+            end
+
+            local MobRoot =
+                GetMobRoot(Mob)
+
+            if not MobRoot then
+
+                CurrentMob = nil
+
+                local NextMob =
+                    FindNextMob()
+
+                if NextMob then
+                    SwitchToMob(NextMob)
+                end
+
+                task.wait(0.05)
+                continue
+            end
+
+            --==================================================
+            -- TARGET POSITION
+            --==================================================
+
+            local MobPosition =
+                MobRoot.Position
+
+            local TargetPosition =
+                MobPosition
+                + Vector3.new(
+                    0,
+                    FLOAT_HEIGHT,
+                    FOLLOW_DISTANCE
+                )
+
+            local Distance =
+                (HRP.Position - TargetPosition).Magnitude
+
+            -- đã gần target
+            if Distance <= 1.5 then
+
+                task.wait(0.05)
+                continue
+            end
+
+            --==================================================
+            -- MOB MOVED
+            --==================================================
+
+            if LastTarget then
+
+                local TargetDifference =
+                    (TargetPosition - LastTarget).Magnitude
+
+                if TargetDifference < TARGET_UPDATE_DISTANCE then
+                    task.wait(0.03)
+                    continue
+                end
+            end
+
+            LastTarget = TargetPosition
+
+            --==================================================
+            -- CREATE ONE TWEEN
+            --==================================================
+
+            StopTween()
+
+            local TweenTime =
+                math.max(
+                    Distance / TWEEN_SPEED,
+                    MIN_TWEEN_TIME
+                )
+
+            local Goal =
+                CFrame.lookAt(
+                    TargetPosition,
+                    MobPosition
+                )
+
+            CurrentTween =
+                TweenService:Create(
+                    HRP,
+                    TweenInfo.new(
+                        TweenTime,
+                        Enum.EasingStyle.Linear,
+                        Enum.EasingDirection.Out
+                    ),
+                    {
+                        CFrame = Goal
+                    }
+                )
+
+            local ThisTween =
+                CurrentTween
+
+            ThisTween:Play()
+
+            --==================================================
+            -- WAIT FOR THIS TWEEN
+            --==================================================
+
+            while AutoKillDungeon
+                and MyToken == FollowToken
+                and CurrentMob == Mob
+                and CurrentTween == ThisTween do
+
+                if not IsMobAlive(Mob) then
+
+                    pcall(function()
+                        ThisTween:Cancel()
+                    end)
+
+                    if CurrentTween == ThisTween then
+                        CurrentTween = nil
+                    end
+
+                    break
+                end
+
+                local NewRoot =
+                    GetMobRoot(Mob)
+
+                if not NewRoot then
+                    break
+                end
+
+                local NewPosition =
+                    NewRoot.Position
+                    + Vector3.new(
+                        0,
+                        FLOAT_HEIGHT,
+                        FOLLOW_DISTANCE
+                    )
+
+                -- nếu mob chạy quá xa khỏi target cũ
+                if
+                    (NewPosition - TargetPosition).Magnitude
+                    >= TARGET_UPDATE_DISTANCE
+                then
+
+                    pcall(function()
+                        ThisTween:Cancel()
+                    end)
+
+                    break
+                end
+
+                task.wait(0.04)
+            end
+
+            if CurrentTween == ThisTween then
+                CurrentTween = nil
+            end
+
+            task.wait(0.01)
+        end
+    end)
+end
+
+--==================================================
+-- SKILL LOOP
+--==================================================
+
+local function StartSkillLoop()
+
+    SkillToken += 1
+
+    local MyToken = SkillToken
+
+    task.spawn(function()
+
+        while AutoKillDungeon
+            and MyToken == SkillToken do
+
+            local Mob = CurrentMob
+
+            if Mob
+                and IsMobAlive(Mob) then
+
+                local Character, Humanoid, HRP =
+                    GetCharacter()
+
+                local MobRoot =
+                    GetMobRoot(Mob)
+
+                if Character and MobRoot then
+
+                    local Distance =
+                        (HRP.Position - MobRoot.Position).Magnitude
+
+                    if Distance <= SKILL_RANGE then
+
+                        if os.clock() - LastSkill
+                            >= SKILL_DELAY then
+
+                            LastSkill = os.clock()
+
+                            local Camera =
+                                workspace.CurrentCamera
+
+                            local MobPosition =
+                                MobRoot.Position
+
+                            local LookCF =
+                                CFrame.lookAt(
+                                    HRP.Position,
+                                    MobPosition
+                                )
+
+                            local Args = {
+                                [1] = {
+                                    ["Camera"] =
+                                        Camera
+                                        and Camera.CFrame
+                                        or HRP.CFrame,
+
+                                    ["SkillId"] = "1",
+
+                                    ["Began"] = true,
+
+                                    ["CFrame"] = LookCF,
+
+                                    ["Typ\208\181"] = 1,
+
+                                    ["Aim"] = MobPosition
+                                }
+                            }
+
+                            pcall(function()
+                                SkillRemote:FireServer(unpack(Args))
+                            end)
+                        end
+                    end
+                end
+            end
+
+            task.wait(0.02)
+        end
+    end)
+end
+
+--==================================================
+-- FIND INITIAL MOB
+--==================================================
+
+local function FindInitialMob()
 
     for _, Mob in ipairs(EventMobs:GetChildren()) do
 
-        if not IsMobDead(Mob) then
-
-            local Root = GetMobRoot(Mob)
-
-            if Root then
-                return Mob
-            end
+        if IsMobAlive(Mob) then
+            return Mob
         end
+
     end
 
     return nil
 end
 
---// =========================================
---// START DETECTION
---// =========================================
+--==================================================
+-- AUTO DETECT NEW MOB
+--==================================================
+
+local ChildAddedConnection = nil
 
 local function StartDetection()
 
-    if DetectConnection then
-        DetectConnection:Disconnect()
-        DetectConnection = nil
+    if ChildAddedConnection then
+        ChildAddedConnection:Disconnect()
     end
 
-    --// CHECK MOB HIỆN TẠI
-    task.spawn(function()
+    ChildAddedConnection =
+        EventMobs.ChildAdded:Connect(function(Mob)
 
-        while AutoKillDungeon do
-
-            if not CurrentMob or IsMobDead(CurrentMob) then
-
-                StopTween()
-                DisconnectFollow()
-                DisconnectSkill()
-                DisconnectHealth()
-
-                CurrentMob = nil
-
-                local Mob = FindEventMob()
-
-                if Mob then
-                    SetMob(Mob)
-                end
+            if not AutoKillDungeon then
+                return
             end
 
-            task.wait(0.05)
-        end
-    end)
+            task.wait()
 
-    --// MOB SPAWN
-    DetectConnection = EventMobs.ChildAdded:Connect(function(Mob)
+            if not IsMobAlive(Mob) then
+                return
+            end
 
-        if not AutoKillDungeon then
-            return
-        end
+            -- chỉ đổi nếu target hiện tại không còn
+            if not CurrentMob
+                or not IsMobAlive(CurrentMob) then
 
-        task.wait()
-
-        if IsMobDead(Mob) then
-            return
-        end
-
-        --// Nếu chưa có target thì lấy ngay
-        if not CurrentMob then
-            SetMob(Mob)
-        end
-    end)
+                SwitchToMob(Mob)
+            end
+        end)
 end
 
---// =========================================
---// STOP ALL
---// =========================================
+--==================================================
+-- STOP
+--==================================================
 
-local function StopDetection()
+local function StopEverything()
 
     AutoKillDungeon = false
 
-    CurrentMob = nil
+    FollowToken += 1
+    SkillToken += 1
 
     StopTween()
 
-    DisconnectFollow()
-    DisconnectSkill()
     DisconnectHealth()
 
-    if DetectConnection then
-        DetectConnection:Disconnect()
-        DetectConnection = nil
+    CurrentMob = nil
+
+    if ChildAddedConnection then
+        ChildAddedConnection:Disconnect()
+        ChildAddedConnection = nil
+    end
+
+    local Character =
+        LP.Character
+
+    local Humanoid =
+        Character
+        and Character:FindFirstChildOfClass("Humanoid")
+
+    if Humanoid then
+        Humanoid:Move(Vector3.zero, false)
     end
 end
 
---// =========================================
---// RESPAWN
---// =========================================
+--==================================================
+-- CHARACTER RESPAWN
+--==================================================
 
 LP.CharacterAdded:Connect(function()
 
     task.wait(1)
 
-    if AutoKillDungeon then
+    if not AutoKillDungeon then
+        return
+    end
 
-        CurrentMob = nil
+    StopTween()
+    DisconnectHealth()
 
-        StopTween()
-        DisconnectFollow()
-        DisconnectSkill()
-        DisconnectHealth()
+    CurrentMob = nil
 
-        local Mob = FindEventMob()
+    task.wait(0.2)
 
-        if Mob then
-            SetMob(Mob)
-        end
+    local Mob =
+        FindInitialMob()
+
+    if Mob then
+        SwitchToMob(Mob)
     end
 end)
 
---// =========================================
---// TOGGLE
---// =========================================
+--==================================================
+-- MAIN TOGGLE
+--==================================================
 
 DungeonBox:AddToggle("Dungeon", {
     Text = "auto kill Dungeon",
@@ -2820,23 +2859,23 @@ DungeonBox:AddToggle("Dungeon", {
 
             StartDetection()
 
-            local Mob = FindEventMob()
+            local Mob =
+                FindInitialMob()
 
             if Mob then
-                SetMob(Mob)
+                SwitchToMob(Mob)
             end
+
+            StartTweenFollow()
+            StartSkillLoop()
 
         else
 
-            StopDetection()
+            StopEverything()
         end
     end
 })
---// =========================================
---// AUTO NEXTAREA - OBSIDIAN
---// RANDOM WALK + AUTO INTERACT
---// =========================================
-
+                        
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local RunService = game:GetService("RunService")
@@ -3266,7 +3305,7 @@ _G.AutoWalkCore = {
 -- OBSIDIAN TOGGLE
 --==================================================
 
-Box:AddToggle("Dungeon", {
+DungeonBox:AddToggle("Dungeon", {
     Text = "Auto nextarea",
     Default = false,
 
