@@ -2182,7 +2182,7 @@ local LP = Players.LocalPlayer
 --// OBSIDIAN
 --// =========================================
 
- Tab1:AddRightGroupbox("Dungeon")
+ local DungeonBox = Tab1:AddRightGroupbox("Dungeon")
 
 --// =========================================
 --// SETTINGS
