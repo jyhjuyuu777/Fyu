@@ -2808,7 +2808,7 @@ end)
 --// TOGGLE
 --// =========================================
 
-Box:AddToggle("AutoKillDungeon", {
+Box:AddToggle("Dungeon", {
     Text = "auto kill Dungeon",
     Default = false,
 
