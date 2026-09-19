@@ -2182,7 +2182,7 @@ local LP = Players.LocalPlayer
 --// OBSIDIAN
 --// =========================================
 
- Tab1:AddLeftGroupbox("Dungeon")
+ Tab1:AddRightGroupbox("Dungeon")
 
 --// =========================================
 --// SETTINGS
@@ -2808,7 +2808,7 @@ end)
 --// TOGGLE
 --// =========================================
 
-Box:AddToggle("Dungeon", {
+RightBox:AddToggle("Dungeon", {
     Text = "auto kill Dungeon",
     Default = false,
 
