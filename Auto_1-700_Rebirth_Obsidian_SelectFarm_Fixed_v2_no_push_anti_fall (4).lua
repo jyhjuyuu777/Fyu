@@ -2165,9 +2165,8 @@ Box:AddToggle("AutoSkillToggle", {
     end
 })
     
-local Box = Tab1:AddleftGroupbox(
-    "Dungeon"
-)
+local Box = Tab1:AddLeftGroupbox("Dungeon")
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
