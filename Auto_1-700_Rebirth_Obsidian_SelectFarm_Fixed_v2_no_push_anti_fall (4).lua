@@ -3321,3 +3321,147 @@ Box:AddToggle("Dungeon", {
         end
     end
 })
+--// =========================================
+--// ANTI FALL SUPPORT TWEEN - OBSIDIAN
+--// =========================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Player = Players.LocalPlayer
+
+local FloatEnabled = false
+local FloatConnections = {}
+
+--==================================================
+-- REMOVE OLD FLOAT
+--==================================================
+
+local function RemoveFloat(Character)
+
+    if not Character then
+        return
+    end
+
+    local Root =
+        Character:FindFirstChild("HumanoidRootPart")
+
+    if not Root then
+        return
+    end
+
+    local BV =
+        Root:FindFirstChild("ContinuousFloat")
+
+    if BV then
+        BV:Destroy()
+    end
+end
+
+--==================================================
+-- SETUP FLOAT
+--==================================================
+
+local function SetupFloat(Character)
+
+    if not Character then
+        return
+    end
+
+    local Root =
+        Character:WaitForChild(
+            "HumanoidRootPart",
+            5
+        )
+
+    if not Root then
+        return
+    end
+
+    -- Xóa BodyVelocity cũ nếu có
+    RemoveFloat(Character)
+
+    if not FloatEnabled then
+        return
+    end
+
+    local BV = Instance.new("BodyVelocity")
+
+    BV.Name = "ContinuousFloat"
+    BV.MaxForce = Vector3.new(
+        0,
+        math.huge,
+        0
+    )
+
+    BV.Velocity = Vector3.zero
+    BV.Parent = Root
+
+    --==================================================
+    -- SUPPORT
+    --==================================================
+
+    local Connection
+
+    Connection = RunService.Heartbeat:Connect(function()
+
+        if not FloatEnabled
+            or not BV.Parent
+            or not Root.Parent then
+
+            if Connection then
+                Connection:Disconnect()
+            end
+
+            return
+        end
+
+        BV.Velocity = Vector3.zero
+    end)
+
+    table.insert(
+        FloatConnections,
+        Connection
+    )
+end
+
+--==================================================
+-- CHARACTER
+--==================================================
+
+Player.CharacterAdded:Connect(function(Character)
+
+    task.wait(0.5)
+
+    if FloatEnabled then
+        SetupFloat(Character)
+    end
+end)
+
+
+
+Box:AddToggle("Dungeon", {
+
+    Text = "anti fallv2 click 4 time",
+
+    Default = false,
+
+    Callback = function(Value)
+
+        FloatEnabled = Value
+
+        local Character =
+            Player.Character
+
+        if Value then
+
+            if Character then
+                SetupFloat(Character)
+            end
+
+        else
+
+            RemoveFloat(Character)
+        end
+    end
+})
