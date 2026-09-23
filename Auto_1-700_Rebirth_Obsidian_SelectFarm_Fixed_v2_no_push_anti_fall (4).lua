@@ -1105,7 +1105,7 @@ local function StartBasic()
                 SkillRemote:FireServer(unpack(args))
             end
 
-            task.wait(0.1)
+            task.wait(1.6)
         end
 
         BasicThread = nil
