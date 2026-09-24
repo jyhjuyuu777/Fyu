@@ -3465,3 +3465,385 @@ Box:AddToggle("Dungeon", {
         end
     end
 })
+--// =========================================
+--// AUTO DUNGEON MOB CHECK
+--// =========================================
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local DungeonLobbyService =
+    ReplicatedStorage
+    :WaitForChild("Packages")
+    :WaitForChild("_Index")
+    :WaitForChild("sleitnick_knit@1.4.7")
+    :WaitForChild("knit")
+    :WaitForChild("Services")
+    :WaitForChild("DungeonLobbyService")
+
+local ChangeDungeon =
+    DungeonLobbyService
+    :WaitForChild("RF")
+    :WaitForChild("ChangeDungeon")
+
+local StartDungeon =
+    DungeonLobbyService
+    :WaitForChild("RF")
+    :WaitForChild("StartDungeon")
+
+local EventMobs =
+    workspace
+    :WaitForChild("World Mobs")
+    :WaitForChild("Event Mobs")
+
+--// =========================
+--// MODE
+--// =========================
+
+local DungeonMobNames = {
+    Mecha = "Mecha Soldier",
+    Atom = "Atom Max",
+    Droid = "Great Droid",
+    Garriot = "Garriot"
+}
+
+local DungeonID = {
+    Mecha = 1,
+    Atom = 2,
+    Droid = 3,
+    Garriot = 4
+}
+
+local SelectedDungeonModes = {}
+local KillRequired = 1
+local AutoMobStart = false
+
+--// vị trí hiện tại trong chuỗi
+local CurrentIndex = 1
+
+--// chống đổi dungeon liên tục
+local ChangingDungeon = false
+
+--// lưu trạng thái từng mob instance
+local MobStates = {}
+
+--// =========================
+--// GROUPBOX
+--// =========================
+
+local DungeonMobBox =
+    Tab:AddRightGroupbox("Auto Start Dungeon")
+
+--// =========================
+--// MULTI DROPDOWN
+--// =========================
+
+DungeonMobBox:AddDropdown("AutoDungeonMobs", {
+    Values = {
+        "Mecha",
+        "Atom",
+        "Droid",
+        "Garriot"
+    },
+
+    Default = {},
+
+    Multi = true,
+
+    Text = "Select Dungeon",
+
+    Tooltip = "Chọn dungeon cần kiểm tra",
+
+    Callback = function(Value)
+        SelectedDungeonModes = Value
+
+        -- reset chuỗi
+        CurrentIndex = 1
+    end
+})
+
+--// =========================
+--// TEXTBOX
+--// =========================
+
+DungeonMobBox:AddInput("DungeonKillAmount", {
+    Default = "1",
+
+    Numeric = true,
+
+    Finished = true,
+
+    ClearTextOnFocus = false,
+
+    Text = "Kill Required",
+
+    Placeholder = "Số mob cần giết",
+
+    Callback = function(Value)
+        local Number = tonumber(Value)
+
+        if Number and Number >= 1 then
+            KillRequired = math.floor(Number)
+        else
+            KillRequired = 1
+        end
+    end
+})
+
+--// =========================
+--// TOGGLE
+--// =========================
+
+DungeonMobBox:AddToggle("AutoDungeonMobStart", {
+    Text = "Auto Start",
+
+    Default = false,
+
+    Callback = function(Value)
+        AutoMobStart = Value
+
+        if Value then
+            print("[Auto Dungeon] ON")
+        else
+            print("[Auto Dungeon] OFF")
+        end
+    end
+})
+
+--// =========================
+--// GET ORDER
+--// =========================
+
+local function GetSelectedOrder()
+    local Order = {}
+
+    -- giữ đúng thứ tự cố định
+    if SelectedDungeonModes.Mecha then
+        table.insert(Order, "Mecha")
+    end
+
+    if SelectedDungeonModes.Atom then
+        table.insert(Order, "Atom")
+    end
+
+    if SelectedDungeonModes.Droid then
+        table.insert(Order, "Droid")
+    end
+
+    if SelectedDungeonModes.Garriot then
+        table.insert(Order, "Garriot")
+    end
+
+    return Order
+end
+
+--// =========================
+--// GET MOB
+--// =========================
+
+local function GetSelectedMob(Mode)
+    local MobName = DungeonMobNames[Mode]
+
+    if not MobName then
+        return nil
+    end
+
+    return EventMobs:FindFirstChild(MobName)
+end
+
+--// =========================
+--// CHANGE DUNGEON
+--// =========================
+
+local function ChangeToMode(Mode)
+    if ChangingDungeon then
+        return
+    end
+
+    local ID = DungeonID[Mode]
+
+    if not ID then
+        return
+    end
+
+    ChangingDungeon = true
+
+    print(
+        "[Auto Dungeon] Change:",
+        Mode,
+        "ID:",
+        ID
+    )
+
+    pcall(function()
+        ChangeDungeon:InvokeServer(ID)
+    end)
+
+    -- chờ ChangeDungeon xử lý
+    task.wait(3)
+
+    if AutoMobStart then
+        pcall(function()
+            StartDungeon:InvokeServer()
+        end)
+    end
+
+    task.wait(1)
+
+    ChangingDungeon = false
+end
+
+--// =========================
+--// NEXT MODE
+--// =========================
+
+local function GoNextMode()
+    local Order = GetSelectedOrder()
+
+    if #Order == 0 then
+        return
+    end
+
+    -- nếu index vượt quá cuối
+    if CurrentIndex > #Order then
+        CurrentIndex = 1
+    end
+
+    local CurrentMode = Order[CurrentIndex]
+
+    -- mode tiếp theo
+    CurrentIndex += 1
+
+    if CurrentIndex > #Order then
+        -- quay ngược
+        -- ví dụ:
+        -- Mecha -> Atom -> Droid -> Atom -> Mecha
+
+        if #Order >= 2 then
+            CurrentIndex = #Order - 1
+        else
+            CurrentIndex = 1
+        end
+    end
+
+    return CurrentMode
+end
+
+--// =========================
+--// MODE STATE
+--// =========================
+
+local ModeKills = {
+    Mecha = 0,
+    Atom = 0,
+    Droid = 0,
+    Garriot = 0
+}
+
+--// =========================
+--// RESET MODE
+--// =========================
+
+local function ResetModeKills()
+    for Mode in pairs(ModeKills) do
+        ModeKills[Mode] = 0
+    end
+
+    MobStates = {}
+end
+
+--// =========================
+--// CHECK ONE MOB
+--// =========================
+
+local function CheckMobDeath(Mode)
+    local Mob = GetSelectedMob(Mode)
+
+    if not Mob then
+        return
+    end
+
+    local Humanoid =
+        Mob:FindFirstChildOfClass("Humanoid")
+
+    if not Humanoid then
+        return
+    end
+
+    local State = MobStates[Mob]
+
+    if not State then
+        State = {
+            SeenAlive = false,
+            Counted = false
+        }
+
+        MobStates[Mob] = State
+    end
+
+    -- mob sống
+    if Humanoid.Health > 0 then
+        State.SeenAlive = true
+        State.Counted = false
+        return
+    end
+
+    -- mob chết
+    if Humanoid.Health <= 0
+        and State.SeenAlive
+        and not State.Counted then
+
+        State.Counted = true
+
+        ModeKills[Mode] =
+            (ModeKills[Mode] or 0) + 1
+
+        print(
+            "[Auto Dungeon]",
+            Mode,
+            "Kill:",
+            ModeKills[Mode],
+            "/",
+            KillRequired
+        )
+
+        -- đủ số
+        if ModeKills[Mode] >= KillRequired then
+
+            ModeKills[Mode] = 0
+
+            local NextMode = GoNextMode()
+
+            if NextMode then
+                task.spawn(function()
+                    ChangeToMode(NextMode)
+                end)
+            end
+        end
+    end
+end
+
+--// =========================
+--// MAIN CHECK
+--// =========================
+
+task.spawn(function()
+
+    while task.wait(0.1) do
+
+        if not AutoMobStart then
+            continue
+        end
+
+        local Order = GetSelectedOrder()
+
+        if #Order == 0 then
+            continue
+        end
+
+        -- chỉ check các mob đã chọn
+        for _, Mode in ipairs(Order) do
+            CheckMobDeath(Mode)
+        end
+    end
+
+end)
