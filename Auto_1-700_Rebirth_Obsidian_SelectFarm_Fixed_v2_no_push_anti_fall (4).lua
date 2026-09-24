@@ -3531,7 +3531,7 @@ local MobStates = {}
 --// =========================
 
 local DungeonMobBox =
-    Tab:AddRightGroupbox("Auto Start Dungeon")
+    Tab1:AddRightGroupbox("Auto Start Dungeon")
 
 --// =========================
 --// MULTI DROPDOWN
